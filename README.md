@@ -12,6 +12,7 @@ Small open-source **desktop** wrapper around **[scrcpy](https://github.com/Genym
 - **Reset ADB** restarts the ADB server (`kill-server` / `start-server`) if the device list looks stuck.  
 - Starts **one** scrcpy window. If **several** phones are in the `device` state, **select a row** in the table, then **Start mirroring**; with **one** ready device, you can start without choosing a row.  
 - **Mirroring quality (v0.3+):** choose a **preset** (Balanced / Smoother / Sharper) and optional **Stay awake**, **Show touches**, **Always on top**; choices are **saved** for the next run (QSettings in your Windows user profile).  
+- **Record to file (optional):** record the mirror session to a video file; the app remembers the last output folder, autogenerates names, and you can use **Save as…** to pick a path for the next start.  
 - **v0.4:** **First-run download** shows **progress**; **Refresh** and ADB work **off the UI thread**; one **scrcpy** session with **Stop**, **separate “Mirroring: …”** status, and log **capped** for long runs; **title bar** and **About** show the version; device table has a **Model** column; **F5** / **Ctrl+Enter** refresh or start; **Wireless ADB…** runs **USB→tcpip** and **pair (Android 11+)** flows; **Connection help** includes a short wireless how-to.
 
 ## Requirements

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -28,7 +29,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from scrcpy_gui import __version__, adb, connection_ux, manifest, mirroring_options, scrcpy_runner
+from scrcpy_gui import (
+    __version__,
+    adb,
+    connection_ux,
+    manifest,
+    mirroring_options,
+    recording_paths,
+    scrcpy_runner,
+)
 from scrcpy_gui.ui.about_dialog import show_about_dialog
 from scrcpy_gui.ui.connection_help_dialog import ConnectionHelpDialog
 from scrcpy_gui.ui.wireless_dialog import WirelessDialog
@@ -103,6 +112,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._dl_progress)
 
         self._settings = QSettings("scrcpy-gui", "scrcpy-gui")
+        self._record_oneshot: Path | None = None
+        self._last_record_path_for_copy: Path | None = None
+        self._chk_record = QCheckBox("Record to file")
+        self._btn_record_saveas = QPushButton("Save as…")
+        self._btn_record_saveas.setEnabled(False)
 
         self._table = QTableWidget(0, 3)
         self._table.setHorizontalHeaderLabels(["Serial", "State", "Model"])
@@ -136,6 +150,11 @@ class MainWindow(QMainWindow):
         opt_lay.addRow(self._chk_stay)
         opt_lay.addRow(self._chk_touches)
         opt_lay.addRow(self._chk_ontop)
+        self._row_record = QHBoxLayout()
+        self._row_record.addWidget(self._chk_record)
+        self._row_record.addWidget(self._btn_record_saveas)
+        self._row_record.addStretch(1)
+        opt_lay.addRow(self._row_record)
         self._opt_group.setLayout(opt_lay)
         layout.addWidget(self._opt_group)
         self._load_mirroring_settings()
@@ -143,6 +162,8 @@ class MainWindow(QMainWindow):
         self._chk_stay.stateChanged.connect(self._save_mirroring_settings)
         self._chk_touches.stateChanged.connect(self._save_mirroring_settings)
         self._chk_ontop.stateChanged.connect(self._save_mirroring_settings)
+        self._chk_record.stateChanged.connect(self._save_mirroring_settings)
+        self._btn_record_saveas.clicked.connect(self._on_record_saveas)
 
         sc_row = QHBoxLayout()
         self._btn_start = QPushButton("Start mirroring")
@@ -226,6 +247,7 @@ class MainWindow(QMainWindow):
         self._chk_stay.blockSignals(True)
         self._chk_touches.blockSignals(True)
         self._chk_ontop.blockSignals(True)
+        self._chk_record.blockSignals(True)
         self._chk_stay.setChecked(
             str(self._settings.value("mirroring/stay_awake", "false")).lower()
             in ("1", "true", "yes", "on"),
@@ -238,9 +260,15 @@ class MainWindow(QMainWindow):
             str(self._settings.value("mirroring/always_on_top", "false")).lower()
             in ("1", "true", "yes", "on"),
         )
+        self._chk_record.setChecked(
+            str(self._settings.value("mirroring/record_enabled", "false")).lower()
+            in ("1", "true", "yes", "on"),
+        )
         self._chk_stay.blockSignals(False)
         self._chk_touches.blockSignals(False)
         self._chk_ontop.blockSignals(False)
+        self._chk_record.blockSignals(False)
+        self._sync_record_saveas_enabled()
 
     @Slot()
     def _save_mirroring_settings(self) -> None:
@@ -251,6 +279,39 @@ class MainWindow(QMainWindow):
         self._settings.setValue("mirroring/stay_awake", "true" if self._chk_stay.isChecked() else "false")
         self._settings.setValue("mirroring/show_touches", "true" if self._chk_touches.isChecked() else "false")
         self._settings.setValue("mirroring/always_on_top", "true" if self._chk_ontop.isChecked() else "false")
+        self._settings.setValue("mirroring/record_enabled", "true" if self._chk_record.isChecked() else "false")
+        if not self._chk_record.isChecked():
+            self._last_record_path_for_copy = None
+        self._sync_record_saveas_enabled()
+
+    def _sync_record_saveas_enabled(self) -> None:
+        self._btn_record_saveas.setEnabled(self._chk_record.isChecked())
+
+    @Slot()
+    def _on_record_saveas(self) -> None:
+        if not self._chk_record.isChecked():
+            return
+        start_dir = self._settings.value("mirroring/record_last_dir", None, str)
+        if isinstance(start_dir, str) and start_dir.strip():
+            base = Path(start_dir)
+            if not base.is_dir():
+                base = recording_paths.default_output_dir()
+        else:
+            base = recording_paths.default_output_dir()
+        suggested = (
+            recording_paths.next_automatic_record_path(base) if base.is_dir() else base / "scrcpy-record.mp4"
+        )
+        path, _ok = QFileDialog.getSaveFileName(
+            self,
+            "Record to file",
+            str(suggested),
+            "Video (*.mp4 *.mkv);;All files (*.*)",
+        )
+        if not path:
+            return
+        p = Path(path)
+        self._record_oneshot = p.resolve()
+        self._settings.setValue("mirroring/record_last_dir", str(p.parent.resolve()))
 
     def _current_scrcpy_extra_args(self) -> list[str]:
         p = self._combo_preset.currentData()
@@ -474,11 +535,34 @@ class MainWindow(QMainWindow):
         a = self._adb
         if not ex or not a or self._mirror is not None:
             return
+        base_args = self._current_scrcpy_extra_args()
+        if not self._chk_record.isChecked():
+            self._last_record_path_for_copy = None
+            extras = list(base_args)
+        else:
+            oneshot = self._record_oneshot
+            if oneshot is not None:
+                path = oneshot
+            else:
+                raw = self._settings.value("mirroring/record_last_dir", None, str)
+                sval = str(raw) if isinstance(raw, str) and str(raw).strip() else None
+                out_dir = recording_paths.effective_output_dir(sval, log=self._append_log)
+                path = recording_paths.next_automatic_record_path(out_dir)
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                self._append_log(f"Recording: cannot create output folder: {e!s}")
+                return
+            if oneshot is not None:
+                self._record_oneshot = None
+            self._settings.setValue("mirroring/record_last_dir", str(path.parent.resolve()))
+            extras = list(base_args) + recording_paths.build_record_arg(path)
+            self._last_record_path_for_copy = path.resolve()
         p = QProcess(self)
         self._mirror = p
         p.setProgram(str(ex))
         p.setArguments(
-            scrcpy_runner.scrcpy_arguments_list(serial, self._current_scrcpy_extra_args()),
+            scrcpy_runner.scrcpy_arguments_list(serial, extras),
         )
         env = QProcessEnvironment.systemEnvironment()
         env.insert("ADB", str(a))
@@ -584,6 +668,10 @@ class MainWindow(QMainWindow):
             self._scrcpy_exe,
             tail,
             " ".join(self._current_scrcpy_extra_args()) or "(defaults)",
+            record_to_file=self._chk_record.isChecked(),
+            last_record_path=str(self._last_record_path_for_copy)
+            if self._last_record_path_for_copy is not None
+            else "",
         )
         QApplication.clipboard().setText(s)
 
@@ -593,7 +681,16 @@ def _details_text(
     sc: Path | None,
     last_log: str,
     mirroring_args: str = "",
+    *,
+    record_to_file: bool = False,
+    last_record_path: str = "",
 ) -> str:
+    if not record_to_file:
+        rline = "off"
+    elif not last_record_path:
+        rline = "on, file: (none started yet with recording)"
+    else:
+        rline = f"on, file: {last_record_path}"
     return (
         f"scrcpy-gui {version}\n"
         f"OS: {platform.platform()}\n"
@@ -601,6 +698,7 @@ def _details_text(
         f"adb: {adb_path}\n"
         f"scrcpy: {sc}\n"
         f"mirroring extra args: {mirroring_args}\n"
+        f"record to file: {rline}\n"
         f"---\n{last_log}"
     )
 
