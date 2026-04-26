@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
 )
 
 from scrcpy_gui import __version__, adb, manifest, scrcpy_runner
-from scrcpy_gui.ensure import ensure_tooling
 
 
 class BootstrapThread(QThread):
@@ -39,6 +38,7 @@ class BootstrapThread(QThread):
             self.error.emit(f"Manifest: {e!s}")
             return
         try:
+            from scrcpy_gui.ensure import ensure_tooling
 
             def log(msg: str) -> None:
                 self.line.emit(msg)

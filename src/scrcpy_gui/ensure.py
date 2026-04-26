@@ -34,7 +34,7 @@ def _download_verify_extract(
         download.verify_file_sha256(z, expected_sha)
         if extract_root.exists():
             shutil.rmtree(extract_root)
-        extract_root.mkdir(parents=True, parents=True)
+        extract_root.mkdir(parents=True)
         log("Extracting…")
         download.extract_zip(z, extract_root)
 
@@ -62,7 +62,7 @@ def ensure_tooling(
         msg = f"adb not found at {adb_path} after install"
         raise RuntimeError(msg)
 
-    if not list(sdir.rglob("scrcpy.exe")):
+    if (not sdir.is_dir()) or (not any(sdir.rglob("scrcpy.exe"))):
         log(f"Downloading {m.scrcpy.filename} (scrcpy)…")
         if sdir.exists():
             shutil.rmtree(sdir)
