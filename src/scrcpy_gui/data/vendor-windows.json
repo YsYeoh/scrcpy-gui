@@ -1,0 +1,14 @@
+{
+  "platform_tools": {
+    "version": "35.0.2",
+    "url": "https://dl.google.com/android/repository/platform-tools_r35.0.2-win.zip",
+    "filename": "platform-tools_r35.0.2-win.zip",
+    "expected_sha256": "2975a3eac0b19182748d64195375ad056986561d994fffbdc64332a516300bb9"
+  },
+  "scrcpy": {
+    "version": "3.3.4",
+    "url": "https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-win64-v3.3.4.zip",
+    "filename": "scrcpy-win64-v3.3.4.zip",
+    "expected_sha256": "d8a155b7c180b7ca4cdadd40712b8750b63f3aab48cb5b8a2a39ac2d0d4c5d38"
+  }
+}
