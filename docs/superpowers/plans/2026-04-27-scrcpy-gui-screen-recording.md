@@ -280,7 +280,7 @@ Add a private method (names may vary; behavior must not):
 
 - **If** `not self._chk_record.isChecked()`: return `self._current_scrcpy_extra_args()` unchanged and set `self._last_record_path_for_copy` to `None` before return (or only update last-path when recording actually runs in Step 2).
 
-- **If** one-shot: `out = self._record_oneshot; self._record_oneshot = None`; then `out_dir = out.parent` and set `self._settings.setValue("mirroring/record_last_dir", str(out_dir.resolve()))`, use `out` as the file path.
+- **If** one-shot: `out = self._record_oneshot` (do **not** clear it yet). After `out.parent.mkdir(parents=True, exist_ok=True)` succeeds, set `self._record_oneshot = None`, set `self._settings.setValue("mirroring/record_last_dir", str(out.parent.resolve()))`, and use `out` as the file path. If `mkdir` fails, keep `_record_oneshot` so the user can fix permissions and retry.
 
 - **Else:** `raw = self._settings.value("mirroring/record_last_dir", None, str)`; `base = recording_paths.effective_output_dir(str(raw) if raw else None, log=self._append_log)`; `path = recording_paths.next_automatic_record_path(base)`; **if** the settings dir was bad, optionally persist the fixed default — spec allows saving after a successful start; the minimal behavior is: save `path.parent` when a successful `mkdir`+start path is chosen (or save on next successful start).
 
