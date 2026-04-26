@@ -34,10 +34,18 @@ python -m scrcpy_gui
 
 ## Windows executable (optional)
 
-With dev dependencies (`pyinstaller`), from the repository root (after `pip install -e ".[dev]"`):
+With dev dependencies (`pyinstaller`), from the repository root (after `pip install -e ".[dev]"`).
+
+**Folder build** (default, `dist\scrcpy-gui\` with `scrcpy-gui.exe` and `_internal\`—ship the **whole** folder):
 
 ```text
 py -m PyInstaller --noconfirm --windowed --name scrcpy-gui --add-data "src/scrcpy_gui/data;scrcpy_gui/data" src/scrcpy_gui/__main__.py
+```
+
+**Single file** (one `dist\scrcpy-gui.exe` to share; first launch may be slightly slower as PyInstaller unpacks to a temp dir):
+
+```text
+py -m PyInstaller --onefile --noconfirm --windowed --name scrcpy-gui --add-data "src/scrcpy_gui/data;scrcpy_gui/data" src/scrcpy_gui/__main__.py
 ```
 
 If the GUI cannot find `vendor-windows.json` at runtime, add `--collect-data scrcpy_gui` (PyInstaller 6+) or list `scrcpy_gui` hidden imports in a `.spec` and rebuild.
