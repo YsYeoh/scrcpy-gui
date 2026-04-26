@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import platform
 import sys
 import traceback
@@ -22,7 +21,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from scrcpy_gui import __version__, adb, manifest, scrcpy_runner
+from scrcpy_gui import __version__, adb, connection_ux, manifest, scrcpy_runner
+from scrcpy_gui.ui.connection_help_dialog import ConnectionHelpDialog
 
 
 class BootstrapThread(QThread):
@@ -59,17 +59,11 @@ class MainWindow(QMainWindow):
         self._scrcpy: Path | None = None
         self._proc: object | None = None
         self._last_log = ""
+        self._devices: list[tuple[str, str]] = []
 
         root = QWidget()
         self.setCentralWidget(root)
         layout = QVBoxLayout(root)
-
-        help_box = QTextEdit(
-            self._help_text()
-        )
-        help_box.setReadOnly(True)
-        help_box.setMaximumHeight(100)
-        layout.addWidget(help_box)
 
         self._status = QLabel("Starting…")
         self._status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -78,6 +72,9 @@ class MainWindow(QMainWindow):
         self._table = QTableWidget(0, 2)
         self._table.setHorizontalHeaderLabels(["Serial", "State"])
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.itemSelectionChanged.connect(self._sync_start_and_status)
         layout.addWidget(self._table)
 
         row2 = QHBoxLayout()
@@ -85,12 +82,19 @@ class MainWindow(QMainWindow):
         self._btn_start.setEnabled(False)
         self._btn_refresh = QPushButton("Refresh devices")
         self._btn_refresh.setEnabled(False)
+        self._btn_help = QPushButton("Connection help")
+        self._btn_reset_adb = QPushButton("Reset ADB")
         self._btn_copy = QPushButton("Copy details")
+        self._btn_reset_adb.setEnabled(False)
         self._btn_start.clicked.connect(self._on_start)
         self._btn_refresh.clicked.connect(self._refresh)
+        self._btn_help.clicked.connect(self._on_connection_help)
+        self._btn_reset_adb.clicked.connect(self._on_reset_adb)
         self._btn_copy.clicked.connect(self._copy)
         row2.addWidget(self._btn_start)
         row2.addWidget(self._btn_refresh)
+        row2.addWidget(self._btn_help)
+        row2.addWidget(self._btn_reset_adb)
         row2.addWidget(self._btn_copy)
         row2.addStretch(1)
         layout.addLayout(row2)
@@ -101,15 +105,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._log)
 
         self._thread: BootstrapThread | None = None
-
-    @staticmethod
-    def _help_text() -> str:
-        return (
-            "USB debugging: On the phone, enable Developer options, then enable USB debugging. "
-            "Connect with USB, choose file transfer (MTP) if prompted, and accept the "
-            "“Allow USB debugging?” fingerprint dialog when it appears. "
-            "Unplug other Android devices if you see more than one listed."
-        )
 
     def _append_log(self, text: str) -> None:
         self._last_log += text + "\n"
@@ -133,10 +128,9 @@ class MainWindow(QMainWindow):
         self._adb = Path(adb_s)
         self._scrcpy = Path(sc)
         self._thread = None
-        self._status.setText("Tooling ready. Connect a device, then use Refresh if needed.")
         self._apply_devices(devices)
-        self._btn_start.setEnabled(self._can_start(self._ready_devices(devices)))
         self._btn_refresh.setEnabled(True)
+        self._btn_reset_adb.setEnabled(True)
 
     @Slot(str)
     def _on_bootstrap_error(self, err: str) -> None:
@@ -150,15 +144,59 @@ class MainWindow(QMainWindow):
             f"\n\n{err[:800]}",
         )
 
-    @staticmethod
-    def _ready_devices(
-        devs: list,
-    ) -> list[tuple[str, str]]:
-        return [(a, b) for (a, b) in devs if b == "device"]
+    def _apply_devices(self, devices) -> None:  # type: ignore[no-untyped-def]
+        self._devices = list(devices)
+        self._table.setRowCount(0)
+        for serial, state in self._devices:
+            r = self._table.rowCount()
+            self._table.insertRow(r)
+            self._table.setItem(r, 0, QTableWidgetItem(serial))
+            self._table.setItem(r, 1, QTableWidgetItem(state))
+        self._select_default_row()
+        self._sync_start_and_status()
 
-    @staticmethod
-    def _can_start(ready: list[tuple[str, str]]) -> bool:
-        return len(ready) == 1
+    def _select_default_row(self) -> None:
+        r = connection_ux.ready_serials(self._devices)
+        if len(r) == 1:
+            only = r[0]
+            for i in range(self._table.rowCount()):
+                it = self._table.item(i, 0)
+                if it is not None and it.text() == only:
+                    self._table.selectRow(i)
+                    return
+        self._table.clearSelection()
+
+    def _selected_serial_for_mirroring(self) -> str | None:
+        return self._serial_to_use(self._devices)
+
+    def _serial_to_use(self, d: list[tuple[str, str]]) -> str | None:
+        """Pick serial to mirror given current table selection and a device list from adb."""
+        r = connection_ux.ready_serials(d)
+        if not r:
+            return None
+        if len(r) == 1:
+            return r[0]
+        row = self._table.currentRow()
+        if row < 0:
+            return None
+        it0 = self._table.item(row, 0)
+        it1 = self._table.item(row, 1)
+        if it0 is None or it1 is None:
+            return None
+        if it1.text() != "device":
+            return None
+        s = it0.text()
+        return s if s in r else None
+
+    @Slot()
+    def _sync_start_and_status(self) -> None:
+        if not self._adb or not self._scrcpy:
+            return
+        self._status.setText(connection_ux.primary_status_line(self._devices))
+        sel = self._selected_serial_for_mirroring()
+        self._btn_start.setEnabled(
+            connection_ux.can_start_mirroring(self._devices, sel),
+        )
 
     @Slot()
     def _refresh(self) -> None:
@@ -167,25 +205,6 @@ class MainWindow(QMainWindow):
         out = adb.run_adb_devices(self._adb)
         d = adb.parse_adb_devices_output(out)
         self._apply_devices(d)
-        r = self._ready_devices(d)
-        self._btn_start.setEnabled(self._can_start(r))
-        u = [x for x in d if "unauthor" in x[1] or x[1] == "unauthorized"]
-        if u:
-            self._status.setText("Unlock the phone and accept the USB debugging prompt.")
-        elif not r and d:
-            self._status.setText("No device in 'device' state. Check cable and USB mode.")
-        elif not d:
-            self._status.setText("No devices — connect USB and enable USB debugging.")
-        else:
-            self._status.setText("Tooling ready.")
-
-    def _apply_devices(self, devices) -> None:  # type: ignore[no-untyped-def]
-        self._table.setRowCount(0)
-        for serial, state in devices:
-            r = self._table.rowCount()
-            self._table.insertRow(r)
-            self._table.setItem(r, 0, QTableWidgetItem(serial))
-            self._table.setItem(r, 1, QTableWidgetItem(state))
 
     @Slot()
     def _on_start(self) -> None:
@@ -193,15 +212,15 @@ class MainWindow(QMainWindow):
             return
         out = adb.run_adb_devices(self._adb)
         d = adb.parse_adb_devices_output(out)
-        ready = self._ready_devices(d)
-        if not self._can_start(ready):
+        # Fresh `adb devices` + current table row (if several are in "device" state).
+        serial = self._serial_to_use(d)
+        if serial is None:
             QMessageBox.information(
                 self,
                 "scrcpy-gui",
-                "Connect exactly one device in “device” state, or plug out extras.",
+                "Select a device row in the “device” state, or connect only one phone, then try again.",
             )
             return
-        serial = ready[0][0]
         self._append_log(f"Starting scrcpy for {serial}…")
 
         def line(s: str) -> None:
@@ -216,6 +235,24 @@ class MainWindow(QMainWindow):
             )
         except OSError as e:
             QMessageBox.critical(self, "scrcpy-gui", f"Failed to start scrcpy: {e!s}")
+
+    @Slot()
+    def _on_connection_help(self) -> None:
+        ConnectionHelpDialog(self).exec()
+
+    @Slot()
+    def _on_reset_adb(self) -> None:
+        if not self._adb:
+            return
+        try:
+            out = adb.restart_adb_server(self._adb)
+        except OSError as e:
+            QMessageBox.critical(self, "scrcpy-gui", f"Reset ADB failed: {e!s}")
+            return
+        if out.strip():
+            self._append_log(out.strip())
+        self._append_log("ADB server restarted. Refreshing device list…")
+        self._refresh()
 
     @Slot()
     def _copy(self) -> None:

@@ -44,3 +44,14 @@ def test_adb_executable_non_win() -> None:
     with mock.patch.object(sys, "platform", "linux"):
         p = adb.adb_executable(base)
     assert p.name == "adb"
+
+
+def test_restart_adb_server_runs_kill_then_start() -> None:
+    p = Path("C:/cache/platform-tools/platform-tools/adb.exe")
+    with mock.patch("scrcpy_gui.adb.subprocess.run", autospec=True) as run:
+        run.return_value = mock.Mock(returncode=0, stdout="", stderr="")
+        out = adb.restart_adb_server(p)
+    assert run.call_count == 2
+    assert list(run.call_args_list[0][0][0]) == [str(p), "kill-server"]
+    assert list(run.call_args_list[1][0][0]) == [str(p), "start-server"]
+    assert isinstance(out, str)

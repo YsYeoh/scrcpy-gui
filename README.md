@@ -8,7 +8,9 @@ Small open-source **desktop** wrapper around **[scrcpy](https://github.com/Genym
   - **Android platform-tools** (ADB) from Google  
   - **scrcpy** for Windows (zip from GitHub releases)  
 - Lists **connected devices** (`adb devices` style).  
-- Starts **one** mirroring window when **exactly one** device is in the `device` state (see in-app help for USB debugging).
+- **Connection help** (step-by-step USB debugging) and a **status line** that changes when the list is empty, `unauthorized`, `offline`, or not yet in the `device` state.  
+- **Reset ADB** restarts the ADB server (`kill-server` / `start-server`) if the device list looks stuck.  
+- Starts **one** scrcpy window. If **several** phones are in the `device` state, **select a row** in the table, then **Start mirroring**; with **one** ready device, you can start without choosing a row.
 
 ## Requirements
 

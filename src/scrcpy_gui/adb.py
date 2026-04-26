@@ -36,3 +36,21 @@ def run_adb_devices(adb: Path) -> str:
         creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
     )
     return (result.stdout or "") + (result.stderr or "")
+
+
+def restart_adb_server(adb: Path) -> str:
+    r1 = subprocess.run(
+        [str(adb), "kill-server"],
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+    )
+    r2 = subprocess.run(
+        [str(adb), "start-server"],
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+    )
+    return (r1.stdout or r1.stderr or "") + (r2.stdout or r2.stderr or "")
