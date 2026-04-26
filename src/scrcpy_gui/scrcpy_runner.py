@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import threading
@@ -25,18 +26,18 @@ def start_scrcpy(
     serial: str,
     log_line: LogFn,
 ) -> subprocess.Popen[str]:
-    cmd: list[str] = [
-        str(scrcpy_exe),
-        f"--adb={str(adb_exe)}",
-        "-s",
-        serial,
-    ]
+    # scrcpy reads the custom adb path from the ADB environment variable; it
+    # does not accept a --adb=… CLI option (see `scrcpy --help` → Environment).
+    env = os.environ.copy()
+    env["ADB"] = str(adb_exe)
+    cmd: list[str] = [str(scrcpy_exe), "-s", serial]
     creation = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
     proc = subprocess.Popen(  # noqa: S603 — controlled argv
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        env=env,
         creationflags=creation,
     )
     if proc.stdout is not None:
