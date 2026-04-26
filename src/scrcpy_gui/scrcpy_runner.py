@@ -31,8 +31,8 @@ def start_scrcpy(
     # does not accept a --adb=… CLI option (see `scrcpy --help` → Environment).
     env = os.environ.copy()
     env["ADB"] = str(adb_exe)
-    rest = list(extra_scrcpy_args or [])
-    cmd: list[str] = [str(scrcpy_exe), "-s", serial, *rest]
+    rest = scrcpy_arguments_list(serial, extra_scrcpy_args)
+    cmd: list[str] = [str(scrcpy_exe), *rest]
     creation = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
     proc = subprocess.Popen(  # noqa: S603 — controlled argv
         cmd,
@@ -50,3 +50,11 @@ def start_scrcpy(
         )
         t.start()
     return proc
+
+
+def scrcpy_arguments_list(
+    serial: str,
+    extra_scrcpy_args: list[str] | None = None,
+) -> list[str]:
+    """Args after the scrcpy executable; used by subprocess and :class:`QProcess`."""
+    return ["-s", serial, *list(extra_scrcpy_args or [])]
