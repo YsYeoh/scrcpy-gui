@@ -5,9 +5,13 @@ import sys
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal, Slot
+from PySide6.QtCore import QSettings, Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -21,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from scrcpy_gui import __version__, adb, connection_ux, manifest, scrcpy_runner
+from scrcpy_gui import __version__, adb, connection_ux, manifest, mirroring_options, scrcpy_runner
 from scrcpy_gui.ui.connection_help_dialog import ConnectionHelpDialog
 
 
@@ -69,6 +73,37 @@ class MainWindow(QMainWindow):
         self._status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self._status)
 
+        self._settings = QSettings("scrcpy-gui", "scrcpy-gui")
+        self._opt_group = QGroupBox("Mirroring quality")
+        opt_lay = QFormLayout()
+        self._combo_preset = QComboBox()
+        self._combo_preset.addItem(
+            "Balanced (default)",
+            mirroring_options.PRESET_BALANCED,
+        )
+        self._combo_preset.addItem(
+            "Smoother — lower resolution, less bandwidth",
+            mirroring_options.PRESET_FAST,
+        )
+        self._combo_preset.addItem(
+            "Sharper — higher resolution, more bandwidth",
+            mirroring_options.PRESET_SHARP,
+        )
+        self._chk_stay = QCheckBox("Keep device awake while mirroring (when plugged in)")
+        self._chk_touches = QCheckBox("Show touch dots on the phone (physical touches only)")
+        self._chk_ontop = QCheckBox("Keep scrcpy window above other windows")
+        opt_lay.addRow("Preset", self._combo_preset)
+        opt_lay.addRow(self._chk_stay)
+        opt_lay.addRow(self._chk_touches)
+        opt_lay.addRow(self._chk_ontop)
+        self._opt_group.setLayout(opt_lay)
+        layout.addWidget(self._opt_group)
+        self._load_mirroring_settings()
+        self._combo_preset.currentIndexChanged.connect(self._save_mirroring_settings)
+        self._chk_stay.stateChanged.connect(self._save_mirroring_settings)
+        self._chk_touches.stateChanged.connect(self._save_mirroring_settings)
+        self._chk_ontop.stateChanged.connect(self._save_mirroring_settings)
+
         self._table = QTableWidget(0, 2)
         self._table.setHorizontalHeaderLabels(["Serial", "State"])
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -109,6 +144,54 @@ class MainWindow(QMainWindow):
     def _append_log(self, text: str) -> None:
         self._last_log += text + "\n"
         self._log.append(text.rstrip())
+
+    def _load_mirroring_settings(self) -> None:
+        p = self._settings.value("mirroring/preset", mirroring_options.PRESET_BALANCED, str)
+        if p not in mirroring_options.ALL_PRESETS:
+            p = mirroring_options.PRESET_BALANCED
+        i = self._combo_preset.findData(p)
+        self._combo_preset.blockSignals(True)
+        self._combo_preset.setCurrentIndex(max(0, i))
+        self._combo_preset.blockSignals(False)
+        self._chk_stay.blockSignals(True)
+        self._chk_touches.blockSignals(True)
+        self._chk_ontop.blockSignals(True)
+        self._chk_stay.setChecked(
+            str(self._settings.value("mirroring/stay_awake", "false")).lower()
+            in ("1", "true", "yes", "on"),
+        )
+        self._chk_touches.setChecked(
+            str(self._settings.value("mirroring/show_touches", "false")).lower()
+            in ("1", "true", "yes", "on"),
+        )
+        self._chk_ontop.setChecked(
+            str(self._settings.value("mirroring/always_on_top", "false")).lower()
+            in ("1", "true", "yes", "on"),
+        )
+        self._chk_stay.blockSignals(False)
+        self._chk_touches.blockSignals(False)
+        self._chk_ontop.blockSignals(False)
+
+    @Slot()
+    def _save_mirroring_settings(self) -> None:
+        preset = self._combo_preset.currentData()
+        if not isinstance(preset, str) or preset not in mirroring_options.ALL_PRESETS:
+            preset = mirroring_options.PRESET_BALANCED
+        self._settings.setValue("mirroring/preset", preset)
+        self._settings.setValue("mirroring/stay_awake", "true" if self._chk_stay.isChecked() else "false")
+        self._settings.setValue("mirroring/show_touches", "true" if self._chk_touches.isChecked() else "false")
+        self._settings.setValue("mirroring/always_on_top", "true" if self._chk_ontop.isChecked() else "false")
+
+    def _current_scrcpy_extra_args(self) -> list[str]:
+        p = self._combo_preset.currentData()
+        if not isinstance(p, str) or p not in mirroring_options.ALL_PRESETS:
+            p = mirroring_options.PRESET_BALANCED
+        return mirroring_options.build_scrcpy_args(
+            p,
+            stay_awake=self._chk_stay.isChecked(),
+            show_touches=self._chk_touches.isChecked(),
+            always_on_top=self._chk_ontop.isChecked(),
+        )
 
     def showEvent(self, event) -> None:  # type: ignore[no-untyped-def, override]
         super().showEvent(event)
@@ -221,6 +304,9 @@ class MainWindow(QMainWindow):
                 "Select a device row in the “device” state, or connect only one phone, then try again.",
             )
             return
+        extra = self._current_scrcpy_extra_args()
+        if extra:
+            self._append_log("Options: " + " ".join(extra))
         self._append_log(f"Starting scrcpy for {serial}…")
 
         def line(s: str) -> None:
@@ -232,6 +318,7 @@ class MainWindow(QMainWindow):
                 self._adb,
                 serial,
                 line,
+                extra_scrcpy_args=extra,
             )
         except OSError as e:
             QMessageBox.critical(self, "scrcpy-gui", f"Failed to start scrcpy: {e!s}")
@@ -261,6 +348,7 @@ class MainWindow(QMainWindow):
             self._adb,
             self._scrcpy,
             self._last_log[-4000:],
+            " ".join(self._current_scrcpy_extra_args()) or "(defaults)",
         )
         QApplication.clipboard().setText(s)
 
@@ -270,6 +358,7 @@ def _details_text(
     adb_path: Path | None,
     sc: Path | None,
     last_log: str,
+    mirroring_args: str = "",
 ) -> str:
     return (
         f"scrcpy-gui {version}\n"
@@ -277,6 +366,7 @@ def _details_text(
         f"Python: {sys.version.splitlines()[0]}\n"
         f"adb: {adb_path}\n"
         f"scrcpy: {sc}\n"
+        f"mirroring extra args: {mirroring_args}\n"
         f"---\n{last_log}"
     )
 
@@ -284,8 +374,10 @@ def _details_text(
 def main() -> int:
     from PySide6.QtWidgets import QApplication
 
+    QApplication.setOrganizationName("scrcpy-gui")
+    QApplication.setApplicationName("scrcpy-gui")
     app = QApplication(sys.argv)
     w = MainWindow()
-    w.resize(700, 520)
+    w.resize(720, 640)
     w.show()
     return app.exec()

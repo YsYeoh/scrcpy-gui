@@ -10,7 +10,8 @@ Small open-source **desktop** wrapper around **[scrcpy](https://github.com/Genym
 - Lists **connected devices** (`adb devices` style).  
 - **Connection help** (step-by-step USB debugging) and a **status line** that changes when the list is empty, `unauthorized`, `offline`, or not yet in the `device` state.  
 - **Reset ADB** restarts the ADB server (`kill-server` / `start-server`) if the device list looks stuck.  
-- Starts **one** scrcpy window. If **several** phones are in the `device` state, **select a row** in the table, then **Start mirroring**; with **one** ready device, you can start without choosing a row.
+- Starts **one** scrcpy window. If **several** phones are in the `device` state, **select a row** in the table, then **Start mirroring**; with **one** ready device, you can start without choosing a row.  
+- **Mirroring quality (v0.3):** choose a **preset** (Balanced / Smoother / Sharper) and optional **Stay awake**, **Show touches**, **Always on top**; choices are **saved** for the next run (QSettings in your Windows user profile).
 
 ## Requirements
 

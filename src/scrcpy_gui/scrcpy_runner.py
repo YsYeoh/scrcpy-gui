@@ -25,12 +25,14 @@ def start_scrcpy(
     adb_exe: Path,
     serial: str,
     log_line: LogFn,
+    extra_scrcpy_args: list[str] | None = None,
 ) -> subprocess.Popen[str]:
     # scrcpy reads the custom adb path from the ADB environment variable; it
     # does not accept a --adb=… CLI option (see `scrcpy --help` → Environment).
     env = os.environ.copy()
     env["ADB"] = str(adb_exe)
-    cmd: list[str] = [str(scrcpy_exe), "-s", serial]
+    rest = list(extra_scrcpy_args or [])
+    cmd: list[str] = [str(scrcpy_exe), "-s", serial, *rest]
     creation = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
     proc = subprocess.Popen(  # noqa: S603 — controlled argv
         cmd,
