@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QMessageBox, QWidget
 
 
 def show_about_dialog(parent: QWidget | None, version: str) -> None:
-    """About box: version, MIT, third-party note (no hard-coded repo URL)."""
+    """About box: version, MIT, and short inline third-party credits (no repo-only files)."""
     QMessageBox.about(
         parent,
         "About scrcpy-gui",
@@ -12,6 +12,9 @@ def show_about_dialog(parent: QWidget | None, version: str) -> None:
         "A small open-source Windows helper to install and run scrcpy (Android screen "
         "mirroring) with bundled ADB. Not affiliated with Genymobile, Google, or The Qt "
         "Company.\n\n"
-        "This program is distributed under the MIT License. Bundled scrcpy, platform-tools, "
-        "and Qt have their own licenses; see THIRD_PARTY_NOTICES in the project.",
+        "This program’s own code is under the MIT License.\n\n"
+        "Third-party components bundled or used at runtime: scrcpy (Apache-2.0; "
+        "separate project by Genymobile); Android platform-tools / ADB (Google’s terms "
+        "for the SDK tools); PySide6 and Qt (LGPL-3.0; The Qt Company); Python standard "
+        "library (PSF License).",
     )
