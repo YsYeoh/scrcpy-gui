@@ -1,12 +1,7 @@
 import sys
 
-def main() -> None:
-    from PySide6.QtWidgets import QApplication, QMessageBox
-    app = QApplication(sys.argv)
-    w = QMessageBox()
-    w.setText("scrcpy-gui stub: replace in Task 6+")
-    w.show()
-    raise SystemExit(app.exec())
+from scrcpy_gui.ui.main_window import main
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
