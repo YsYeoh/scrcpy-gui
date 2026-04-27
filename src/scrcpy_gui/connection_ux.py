@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-
-def ready_serials(devs: list[tuple[str, str]]) -> list[str]:
-    return [s for s, st in devs if st == "device"]
+from scrcpy_gui.adb import AdbDevice
 
 
-def primary_status_line(devs: list[tuple[str, str]]) -> str:
+def ready_serials(devs: list[AdbDevice]) -> list[str]:
+    return [d.serial for d in devs if d.state == "device"]
+
+
+def primary_status_line(devs: list[AdbDevice]) -> str:
     if not devs:
         return "No devices found — connect USB, enable USB debugging, then tap Refresh."
-    if any(st == "unauthorized" for _, st in devs):
+    if any(d.state == "unauthorized" for d in devs):
         return "On the phone, allow USB debugging when prompted, then tap Refresh."
-    if any(st == "offline" for _, st in devs):
+    if any(d.state == "offline" for d in devs):
         return "A device looks offline — try another port or USB cable, then tap Refresh."
     r = ready_serials(devs)
     if not r:
@@ -21,7 +23,7 @@ def primary_status_line(devs: list[tuple[str, str]]) -> str:
 
 
 def can_start_mirroring(
-    devs: list[tuple[str, str]],
+    devs: list[AdbDevice],
     selected_serial: str | None,
 ) -> bool:
     r = ready_serials(devs)
@@ -35,7 +37,7 @@ def can_start_mirroring(
 
 
 def resolve_serial(
-    devs: list[tuple[str, str]],
+    devs: list[AdbDevice],
     selected_serial: str | None,
 ) -> str | None:
     r = set(ready_serials(devs))
@@ -48,6 +50,18 @@ def resolve_serial(
     return None
 
 
+def _wireless_howto_table() -> str:
+    return (
+        "\n"
+        "— Wireless ADB: which method to use? —\n"
+        "• You already have USB + “device”: use “Switch to network (USB)”: enable tcpip, "
+        "enter IP:port, Connect, then Refresh. Fastest for home Wi‑Fi.\n"
+        "• Phone only offers “Wireless debugging” (Android 11+): use “Pair new device”: "
+        "enter the pairing address and code from the phone, Pair, then connect to the IP "
+        "and port the phone shows for the session, then Refresh.\n"
+    )
+
+
 def detailed_help_text() -> str:
     return (
         "1) Use a data-capable USB cable and port (avoid charge-only USB).\n"
@@ -56,4 +70,6 @@ def detailed_help_text() -> str:
         "4) On the “Allow USB debugging?” screen, check “Always” if you like, then tap OK.\n"
         "5) In this app, tap Refresh. If the list is stuck, try Reset ADB, then Refresh.\n"
         "6) If more than one phone is ready, select the correct row, then Start mirroring.\n"
-    )
+        "7) For Wi‑Fi, use the Wireless ADB action and follow the in-dialog steps, then "
+        "Refresh the device list.\n"
+    ) + _wireless_howto_table()

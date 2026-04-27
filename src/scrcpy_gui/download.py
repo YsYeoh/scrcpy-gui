@@ -37,7 +37,7 @@ def download_url_to_file(
 ) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
-    req = urllib.request.Request(url, headers={"User-Agent": "scrcpy-gui/0.1"})
+    req = urllib.request.Request(url, headers={"User-Agent": "scrcpy-gui/0.4"})
     with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
         total = None
         cl = resp.headers.get("Content-Length")
