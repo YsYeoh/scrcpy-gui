@@ -71,19 +71,29 @@ python -m scrcpy_gui
 
 With dev dependencies (`pyinstaller`), from the repository root (after `pip install -e ".[dev]"`).
 
+**Application icon:** the repo includes `logo_ico.ico` at the root. Pass it to PyInstaller so Explorer, the taskbar, and shortcuts show your icon:
+
+```text
+--icon=logo_ico.ico
+```
+
+Use a multi-size `.ico` (for example 16, 32, 48, 256) for best results on HiDPI displays.
+
 **Folder build** (default, `dist\scrcpy-gui\` with `scrcpy-gui.exe` and `_internal\`—ship the **whole** folder):
 
 ```text
-py -m PyInstaller --noconfirm --windowed --name scrcpy-gui --add-data "src/scrcpy_gui/data;scrcpy_gui/data" src/scrcpy_gui/__main__.py
+py -m PyInstaller --noconfirm --windowed --name scrcpy-gui --icon=logo_ico.ico --add-data "src/scrcpy_gui/data;scrcpy_gui/data" src/scrcpy_gui/__main__.py
 ```
 
 **Single file** (one `dist\scrcpy-gui.exe` to share; first launch may be slightly slower as PyInstaller unpacks to a temp dir):
 
 ```text
-py -m PyInstaller --onefile --noconfirm --windowed --name scrcpy-gui --add-data "src/scrcpy_gui/data;scrcpy_gui/data" src/scrcpy_gui/__main__.py
+py -m PyInstaller --onefile --noconfirm --windowed --name scrcpy-gui --icon=logo_ico.ico --add-data "src/scrcpy_gui/data;scrcpy_gui/data" src/scrcpy_gui/__main__.py
 ```
 
 If the GUI cannot find `vendor-windows.json` at runtime, add `--collect-data scrcpy_gui` (PyInstaller 6+) or list `scrcpy_gui` hidden imports in a `.spec` and rebuild.
+
+**Windows installer (Inno Setup):** to package the PyInstaller output into a setup program (shortcuts, uninstall), see [docs/inno-setup.md](docs/inno-setup.md).
 
 ## Cache location
 
